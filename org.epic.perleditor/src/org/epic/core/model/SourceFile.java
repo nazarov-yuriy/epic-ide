@@ -10,6 +10,8 @@ import org.epic.perleditor.PerlEditorPlugin;
 import org.epic.perleditor.editors.PartitionTypes;
 import org.epic.perleditor.editors.PerlPartitioner;
 
+import com.sun.corba.se.impl.orbutil.closure.Constant;
+
 /**
  * A parsed Perl source file. This class provides access to 
  * {@link org.epic.core.model.ISourceElement}s recognised in a Perl
@@ -23,7 +25,7 @@ public class SourceFile
     private final ILog log;
     private final IDocument doc;
     private List pods;
-    private List packages;
+    private List<Package> packages;
     
     /**
      * Creates a SourceFile which will be reflecting contents of the given
@@ -64,7 +66,7 @@ public class SourceFile
      * @return a list of {@link Package} instances representing package
      *         scopes within the source file
      */
-    public List getPackages()
+    public List<Package> getPackages()
     {
         return Collections.unmodifiableList(packages);
     }
@@ -151,6 +153,14 @@ public class SourceFile
             ((ISourceFileListener) listeners[i]).sourceFileChanged(this);
     }
     
+    private enum UseState {
+        START,
+        AFTER_USE,
+        AFTER_USE_BASE,
+        AFTER_USE_CONSTANT,
+        AFTER_USE_CONSTANT_CURLY_BRACKET,
+        AFTER_USE_CONSTANT_CURLY_BRACKET_WAIT_COMA
+       }
     private class ParsingState
     {
         private final int tokenCount;
@@ -166,9 +176,9 @@ public class SourceFile
         private PerlToken packageKeyword;
         private PerlToken subKeyword;
         private PerlToken useKeyword;
+        private UseState useState;
         private PerlToken subName;
         private boolean inSubProto;
-        private PerlToken baseKeyword;
         
         public ParsingState(List tokens)
         {
@@ -177,6 +187,7 @@ public class SourceFile
             this.tokenCount = tokens.size();
             this.pkgStack = new Stack();
             this.subStack = new Stack();
+            this.useState = UseState.START;
         }
         
         public void finish()
@@ -334,37 +345,78 @@ public class SourceFile
         
         private void updateUseState() throws BadLocationException
         {
-            if (useKeyword == null)
+            String text = t.getText().trim();
+            switch(useState)
             {
-                if (type == PerlTokenTypes.KEYWORD_USE) useKeyword = t;
-            }
-            else
-            {
-                String text = t.getText().trim();
-                if (type == PerlTokenTypes.WORD || type == PerlTokenTypes.STRING_BODY)
+            case START:
+                if (type == PerlTokenTypes.KEYWORD_USE)
                 {
-                    if ("base".equals(text) || "parent".equals(text))
+                    useKeyword = t;
+                    useState = UseState.AFTER_USE;
+                }
+                break;
+            case AFTER_USE:
+                if (type == PerlTokenTypes.WORD)
+                {
+                    if("base".equals(text) || "parent".equals(text))
                     {
-                        baseKeyword = t;
-                        return;
+                        useState = UseState.AFTER_USE_BASE;
                     }
-                    if (!"constant".equals(text) &&
-                        !"vars".equals(text) &&
-                        !"feature".equals(text) &&
-                        !"qw".equals(text))
+                    else if("constant".equals(text))
+                    {
+                        useState = UseState.AFTER_USE_CONSTANT;
+                    }
+                    else if("vars".equals(text) || "feature".equals(text))
+                    {
+                        useState = UseState.START;
+                    }
+                    else
                     {
                         getCurrentPackage().addUse(useKeyword, t);
-                        if (baseKeyword != null) getCurrentPackage().addParent(useKeyword, t);
+                        useState = UseState.START;
                     }
-                    if (baseKeyword == null) useKeyword = null;
                 }
-
-                // end of command..
-                if (";".equals(text))
+                break;
+            case AFTER_USE_BASE:
+                if (type == PerlTokenTypes.STRING_BODY)
                 {
-                    useKeyword = null;
-                    baseKeyword = null;
+                    useState = UseState.START;
+                    getCurrentPackage().addUse(useKeyword, t);
+                    getCurrentPackage().addParent(useKeyword, t);
                 }
+                break;
+            case AFTER_USE_CONSTANT:
+                if (type == PerlTokenTypes.WORD)
+                {
+                    useState = UseState.START;
+                    getCurrentPackage().addConstant(t);
+                }
+                else if(type == PerlTokenTypes.OPEN_CURLY)
+                {
+                    useState = UseState.AFTER_USE_CONSTANT_CURLY_BRACKET;
+                }
+                break;
+            case AFTER_USE_CONSTANT_CURLY_BRACKET:
+                if (type == PerlTokenTypes.WORD)
+                {
+                    useState = UseState.AFTER_USE_CONSTANT_CURLY_BRACKET_WAIT_COMA;
+                    getCurrentPackage().addConstant(t);
+                }
+                else if(type == PerlTokenTypes.CLOSE_CURLY)
+                {
+                    useState = UseState.START;
+                }
+                break;
+            case AFTER_USE_CONSTANT_CURLY_BRACKET_WAIT_COMA:
+                if (type == PerlTokenTypes.OPER_COMMA)
+                {
+                    useState = UseState.AFTER_USE_CONSTANT_CURLY_BRACKET;
+                }
+                else if(type == PerlTokenTypes.CLOSE_CURLY)
+                {
+                    useState = UseState.START;
+                }
+                break;
             }
         }
     }

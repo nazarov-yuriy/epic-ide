@@ -38,6 +38,7 @@ public class Package implements IMultilineElement
     private final List subs;
     private final List uses;
     private final List parents;
+    private final HashMap<String, Constant> constants;
     private PerlToken lastToken;
     
     /**
@@ -52,6 +53,7 @@ public class Package implements IMultilineElement
         this.subs = new ArrayList();
         this.uses = new ArrayList();
         this.parents = new ArrayList();
+        this.constants = new HashMap<String, Constant>();
     }
     
     /**
@@ -70,6 +72,7 @@ public class Package implements IMultilineElement
         this.subs = new ArrayList();
         this.uses = new ArrayList();
         this.parents = new ArrayList();
+        this.constants = new HashMap<String, Constant>();
     }
     
     public Subroutine addSub(
@@ -97,6 +100,13 @@ public class Package implements IMultilineElement
         ModuleUse ret = new ModuleUse(this, uses.size(), keyword, name);
         parents.add(ret);
         return ret;
+    }
+    
+    public void addConstant(PerlToken name)
+            throws BadLocationException
+    {
+        Constant constant = new Constant(this, constants.size(), name);
+        constants.put(name.getText(), constant);
     }
 
     public boolean equals(Object obj)
@@ -143,6 +153,15 @@ public class Package implements IMultilineElement
     public List getSubs()
     {
         return Collections.unmodifiableList(subs);
+    }
+    
+    public Constant getConstant(String constantName)
+    {
+    	if(constants.containsKey(constantName)){
+    		return constants.get(constantName);
+    	}else{
+    		return null;
+    	}
     }
     
     public List getUses()

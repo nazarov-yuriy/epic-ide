@@ -24,6 +24,7 @@ public class OpenDeclarationAction extends PerlEditorAction
 {
     private final OpenSubDeclaration openSub;
     private final OpenPackageDeclaration openPackage;
+    private final OpenConstantDeclaration openConstant;
     
     //~ Constructors
 
@@ -33,6 +34,7 @@ public class OpenDeclarationAction extends PerlEditorAction
         
         this.openSub = new OpenSubDeclaration(this);
         this.openPackage = new OpenPackageDeclaration(this);
+        this.openConstant = new OpenConstantDeclaration(this);
     }
     
     //~ Methods
@@ -45,8 +47,12 @@ public class OpenDeclarationAction extends PerlEditorAction
         AbstractOpenDeclaration.Result res1 = openSub.run(selection);
         if (!res1.isFound())
         {
-            AbstractOpenDeclaration.Result res2 = openPackage.run(selection);
-            if (!res2.isFound()) reportFailure(res1);
+            AbstractOpenDeclaration.Result res2 = openConstant.run(selection);
+            if (!res2.isFound())
+            {
+                AbstractOpenDeclaration.Result res3 = openPackage.run(selection);
+                if (!res3.isFound()) reportFailure(res1);
+            }
         }
     }
     
@@ -55,8 +61,12 @@ public class OpenDeclarationAction extends PerlEditorAction
         AbstractOpenDeclaration.Result res1 = openSub.run();
         if (!res1.isFound())
         {
-            AbstractOpenDeclaration.Result res2 = openPackage.run();
-            if (!res2.isFound()) reportFailure(res1);
+            AbstractOpenDeclaration.Result res2 = openConstant.run();
+            if (!res2.isFound())
+            {
+                AbstractOpenDeclaration.Result res3 = openPackage.run();
+                if (!res3.isFound()) reportFailure(res1);
+            }
         }
     }
     
